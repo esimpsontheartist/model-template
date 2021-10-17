@@ -39,6 +39,13 @@
 import runway
 from runway.data_types import number, text, image
 from example_model import ExampleModel
+import pickle
+import numpy as np
+import tensorflow as tf
+import dnnlib.tflib as tflib
+import os
+
+fmt = dict(func=tflib.convert_images_to_uint8, nchw_to_nhwc=True)
 
 # Setup the model, initialize weights, set the configs of the model, etc.
 # Every model will have a different set of configurations and requirements.
@@ -54,21 +61,48 @@ setup_options = {
 def setup(opts):
    checkpoint_path = opts['checkpoint']
    model = load_model_from_checkpoint(checkpoint_path)
+    global Gs
+    tflib.init_tf()
+    with open(opts['checkpoint'], 'rb') as file:
+        G, D, Gs = pickle.load(file, encoding='latin1')
+    noise_vars = [var for name, var in Gs.components.synthesis.vars.items() if name.startswith('noise')]
+    rnd = np.random.RandomState()
+    tflib.set_vars({var: rnd.randn(*var.shape.as_list()) for var in noise_vars})
+   return Gs
    return model
+
+generate_inputs = {
+    'z': runway.vector(512, sampling_std=0.5),
+    'label': runway.number(min=0, max=1000000, default=22, step=1), # generate random labels
+    'scale': runway.number(min=-1, max=1, default=0.25, step=0.05),  # magnitude of labels - 0 = no labels
+    'truncation': runway.number(min=-1.5, max=1.5, default=1, step=0.1)
+}
 
 # Every model needs to have at least one command. Every command allows to send
 # inputs and process outputs. To see a complete list of supported inputs and
 # outputs data types: https://sdk.runwayml.com/en/latest/data_types.html
 @runway.command(name='generate',
                 inputs={ 'caption': text() },
-                outputs={ 'image': image(width=512, height=512) },
-                description='Generates a red square when the input text input is "red".')
+                outputs={ 'image': image(width=1024, height=1024) },
+                description='Generates.')
 def generate(model, args):
     print('[GENERATE] Ran with caption value "{}"'.format(args['caption']))
     # Generate a PIL or Numpy image based on the input caption, and return it
     output_image = model.run_on_input(args['caption'])
     return {
-        'image': output_image
+        'image': output_image}
+        
+def convert(model, inputs):
+    z = inputs['z']
+    label = int(inputs['label'])
+    scale = inputs['scale']
+    truncation = inputs['truncation']
+    latents = z.reshape((1, 512))
+    labels = scale * np.random.RandomState(label).randn(167)
+    labels = labels.reshape((1,167)).astype(np.float32)
+    images = model.run(latents, labels, truncation_psi=truncation, randomize_noise=False, output_transform=fmt)
+    output = np.clip(images[0], 0, 255).astype(np.uint8)
+    return {'image': output}
     }
 
 if __name__ == '__main__':
