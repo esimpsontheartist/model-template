@@ -49,11 +49,11 @@ setup_options = {
     'truncation': number(min=1, max=10, step=1, default=5, description='Example input.'),
     'seed': number(min=0, max=1000000, description='A seed used to initialize the model.')
 }
-@runway.setup(options=setup_options)
+# runway_model.py
+@runway.setup(options={'checkpoint': runway.file(extension='.pkl')})
 def setup(opts):
-    msg = '[SETUP] Ran with options: seed = {}, truncation = {}'
-    print(msg.format(opts['seed'], opts['truncation']))
-    model = ExampleModel(opts)
+   checkpoint_path = opts['checkpoint']
+   model = load_model_from_checkpoint(checkpoint_path)
     return model
 
 # Every model needs to have at least one command. Every command allows to send
