@@ -54,7 +54,7 @@ setup_options = {
 def setup(opts):
    checkpoint_path = opts['checkpoint']
    model = load_model_from_checkpoint(checkpoint_path)
-    return model
+   return model
 
 # Every model needs to have at least one command. Every command allows to send
 # inputs and process outputs. To see a complete list of supported inputs and
